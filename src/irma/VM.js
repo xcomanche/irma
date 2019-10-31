@@ -11,7 +11,7 @@ const Db         = require('./../common/Db');
 const Organism   = require('./Organism');
 const Mutations  = require('./Mutations');
 const World      = require('./World');
-const PLUGINS    = Helper.requirePlugins(Config.plugins);
+const PLUGINS    = Helper.requirePlugins(Config.PLUGINS);
 /**
  * {Number} This offset will be added to commands value. This is how we
  * add an ability to use numbers in a code, just putting them as command
@@ -68,7 +68,6 @@ class VM {
         this.population       = 0;
         this.api              = {createOrg: this._createOrg.bind(this)};
 
-        this._viewOffs        = 0;
         this._ts              = Date.now();
         this._i               = 0;
         this._freq            = {};
@@ -474,7 +473,7 @@ class VM {
                             const offset = org.offset + ax;
                             if (offset < 0 || offset > MAX_OFFS) {ax = 0; continue}
                             const dot = world.getOrgIdx(offset);
-                            ax = (dot < 0 ? 0 : orgsAndMolsRef[dot].color);
+                            ax = (dot < 0 ? 0 : orgsAndMolsRef[dot].color || Config.molColor);
                             continue;
 
                         case CODE_CMD_OFFS + 39: {// say
@@ -741,22 +740,53 @@ class VM {
         return org;
     }
 
+    /**
+     * Is called on pressing one of arrow buttons. Scrolls world inside canvas
+     * to appropriate direction till the it's edge and stops at the end or
+     * beginning.
+     * @param {MouseEvent} e
+     */
     _onScroll(e) {
-        this._viewOffs += 30;
-        // TODO: _viewOffs should be updated already
-        let   offs   = this._viewOffs;
         const world  = this.world;
-        const data   = world.data;
-        const canvas = world.canvas;
         const width  = Config.WORLD_CANVAS_WIDTH;
+        const row    = Config.WORLD_WIDTH  - width;
+        const col    = Config.WORLD_HEIGHT - Config.WORLD_CANVAS_HEIGHT;
 
+        switch (e.which) {
+            case 37: if ((world.viewX -= Config.worldScrollValue) < 0)    {world.viewX = 0;   this._scrollHorizontally(true)}  break; // left
+            case 39: if ((world.viewX += Config.worldScrollValue) >= row) {world.viewX = row; this._scrollHorizontally(false)} break; // right
+            case 38: if ((world.viewY -= Config.worldScrollValue) < 0)    {world.viewY = 0;   this._scrollVertically(true)}    break; // up
+            case 40: if ((world.viewY += Config.worldScrollValue) >= col) {world.viewY = col; this._scrollVertically(false)}   break; // down
+            default: return;
+        }
+
+        let   offs     = world.viewOffs = world.viewY * Config.WORLD_WIDTH + world.viewX;
+        const canvas   = world.canvas;
+        const orgs     = this.orgsAndMols.ref();
+        const molColor = Config.molColor;
+        //
+        // Copy world's part into the canvas accodring to new scroll offsets
+        //
         for (let y = 0, height = Config.WORLD_CANVAS_HEIGHT; y < height; y++) {
             const yOffs = y * width;
             for (let x = 0; x < width; x++) {
                 const org = world.getOrgIdx(offs++);
-                canvas.dot(yOffs + x, org === -1 ? 0x000000 : org.color);
+                canvas.dot(yOffs + x, org === -1 ? 0x000000 : orgs[org].color || molColor);
             }
+            offs += row;
         }
+        world.viewX1    = world.viewX + width - 1;
+        world.viewOffs1 = world.viewOffs + (Config.WORLD_CANVAS_HEIGHT - 1) * Config.WORLD_WIDTH + row + Config.WORLD_CANVAS_WIDTH - 1;
+
+        return true;
+    }
+
+    _scrollHorizontally(right) {
+        
+    }
+
+    _scrollVertically(down) {
+
     }
 }
 module.exports = VM;
